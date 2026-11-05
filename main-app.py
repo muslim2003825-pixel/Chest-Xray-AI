@@ -36,44 +36,47 @@ def calculate_affected_pixels_percentage(img_gray):
     percentage = (affected_pixels / total_pixels) * 100
     return max(1, min(100, percentage))
 
-# 3. واجهة استقبال ورفع الصور للزوار والدكتور
-uploaded_file = st.file_uploader("قم برفع صورة أشعة الصدر السينية (Chest X-ray)...", type=["jpg", "jpeg", "png"])
+# 3. خطوة الاختيار المنظم لنوع الفحص الطبي (الحل الأكاديمي الجذري)
+st.write("### 🩺 خطوة الفرز المسبق وتحديد العضو:")
+scan_type = st.radio(
+    "يرجى تحديد الفحص الطبي المطلوب إجراؤه في المنظومة:",
+    ("فحص أشعة الصدر السينية (Chest X-ray)", "فحص الجمجمة أو عظام أخرى (Skull / Out of Bound)")
+)
 
-if uploaded_file is not None and model_loaded:
-    # قراءة الصورة المرفوعة وتحويلها بصيغة OpenCV
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1)
-    
-    # عرض الصورة الأصلية للمستخدم بكامل حجمها الطبيعي المرفوع
-    st.image(image, caption="الصورة الطبية الجاري فحصها", use_container_width=True)
-    
-    # المعالجة المسبقة التلقائية للصورة لتطابق مدخلات كولاب (224x224 وتطبيع البكسل الدقيق)
-    resized_img = cv2.resize(image, TARGET_SIZE)
-    img_gray = cv2.cvtColor(resized_img, cv2.COLOR_BGR2GRAY) 
-    
-    # خطوة التطبيع الهامة جداً لمنع قراءة "تضخم" المستمرة
-    normalized_img = resized_img.astype('float32') / 255.0  
-    input_tensor = np.expand_dims(normalized_img, axis=0) 
+st.write("---")
 
-    st.write("### ⚙️ نتائج الفحص والتحليل الذكي:")
-    
-    # 🕵️‍♂️ الفلتر الهيكلي الحازم: تحليل كثافة الخطوط الحادة (Edge Density)
-    # صور الجمجمة والأسنان والفقرات تحتوي على خطوط وتفاصيل عظمية حادة ومكثفة جداً في مساحات صغيرة مقارنة بأشعة الصدر الملساء والناعمة داخلياً.
-    edges = cv2.Canny(img_gray, 50, 150)
-    edge_density = np.sum(edges > 0) / edges.size * 100 # حساب النسبة المئوية لكثافة الخطوط في الصورة
-    
-    # إذا تجاوزت كثافة التفاصيل والخطوط الهيكلية حد الأمان (أشعة الصدر الطبيعية تكون تفاصيلها الناعمة أقل من 6.5%)
-    if edge_density > 6.5:
-        st.error("❌ تم رفض الصورة تلقائياً! الهيكل التشريحي المرفوع لا يطابق مواصفات أشعة الصدر (Chest X-ray).")
-        st.warning("💡 تنبيه منظومة الأمان الهيكلية: تم رصد كثافة عظمية وتفاصيل حادة غريبة (مثل فك، أسنان، أو فقرات عنقية). يرجى تزويد النظام بأشعة صدر صحيحة.")
-    
-    else:
-        st.info("📸 تم التحقق بنجاح: الهيكل العام يطابق مواصفات أشعة الصدر. جاري التشخيص الرقمي...")
+# 4. التحكم في توجيه الفحص بناءً على الاختيار
+if scan_type == "فحص الجمجمة أو عظام أخرى (Skull / Out of Bound)":
+    st.error("❌ عذراً! النظام مخصص حصرياً لتشخيص أمراض القفص الصدري والرئتين.")
+    st.warning("💡 تنبيه اللجنة: تم حجب المدخلات نظراً لأن النموذج مدرب فقط على أمراض (التهاب الرئة، تضخم القلب، السل، وكورونا). يرجى التغيير إلى خيار فحص الصدر.")
+
+else:
+    # واجهة استقبال ورفع الصور في حال اختيار الصدر
+    uploaded_file = st.file_uploader("قم برفع صورة أشعة الصدر السينية (Chest X-ray)...", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file is not None and model_loaded:
+        # قراءة الصورة المرفوعة وتحويلها بصيغة OpenCV
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        image = cv2.imdecode(file_bytes, 1)
+        
+        # عرض الصورة الأصلية للمستخدم بكامل حجمها الطبيعي المرفوع
+        st.image(image, caption="الصورة الطبية الجاري فحصها حالياً", use_container_width=True)
+        
+        # المعالجة المسبقة التلقائية للصورة لتطابق مدخلات كولاب (224x224 وتطبيع البكسل الدقيق)
+        resized_img = cv2.resize(image, TARGET_SIZE)
+        img_gray = cv2.cvtColor(resized_img, cv2.COLOR_BGR2GRAY) 
+        
+        # خطوة التطبيع الهامة جداً لمنع قراءة "تضخم" المستمرة
+        normalized_img = resized_img.astype('float32') / 255.0  
+        input_tensor = np.expand_dims(normalized_img, axis=0) 
+
+        st.write("### ⚙️ نتائج الفحص والتحليل الذكي:")
+        st.info("📸 تم قبول الصورة كمدخل ضمن النطاق. جاري التشخيص الرقمي ومقارنة الأنماط البيولوجية...")
         
         # تنفيذ التنبؤ عبر نموذج كولاب الخاص بك
         predictions = chest_model.predict(input_tensor)
         result_index = np.argmax(predictions)
-        confidence_score = predictions[result_index] * 100 
+        confidence_score = predictions[0][result_index] * 100 
         
         # حساب نسبة البكسل المتأثرة
         pixel_percentage = calculate_affected_pixels_percentage(img_gray)
@@ -97,7 +100,7 @@ if uploaded_file is not None and model_loaded:
             st.sidebar.warning("⚠️ تم رصد مؤشرات مرضية")
             st.error(f"📌 التشخيص النهائي للمريض: **المريض مصاب بـ ({detected_disease})**")
             
-        # 4. عرض المقاييس والنسب الرقمية المطلوبة للمناقشة بشكل منسق واحترافي
+        # 5. عرض المقاييس والنسب الرقمية المطلوبة للمناقشة بشكل منسق واحترافي
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="📈 نسبة ثقة اليقين (Confidence)", value=f"{confidence_score:.2f}%")
