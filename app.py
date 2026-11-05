@@ -11,67 +11,66 @@ def load_my_model():
 
 model = load_my_model()
 
-# 2. إعداد تصنيفات الأمراض
-CATEGORIES_AR = {
-    'Cardiomegaly': 'تضخم عضلة القلب',
-    'COVID-19': 'إصابة كورونا',
-    'Normal': 'حالة سليمة (طبيعي)',
-    'Pneumonia': 'التهاب رئوي حاد',
-    'Tuberculosis': 'مرض السل الرئوي'
-}
+# 2. إعداد تصنيفات الأمراض بالترتيب الصحيح
+CATEGORIES_AR = ['تضخم عضلة القلب', 'إصابة كورونا', 'حالة سليمة (طبيعي)', 'التهاب رئوي حاد', 'مرض السل الرئوي']
 CATEGORIES_EN = ['Cardiomegaly', 'COVID-19', 'Normal', 'Pneumonia', 'Tuberculosis']
 
 # 3. تصميم واجهة الموقع
 st.title("نظام الذكاء الاصطناعي لتشخيص أشعة الصدر")
 st.write("التقرير الفني والشعاعي الميكانيكي باللغة العربية")
 
-uploaded_file = st.file_uploader("اختر صورة الأشعة...", type=["jpg", "jpeg", "png"])
+# رفع الصورة
+uploaded_file = st.file_uploader("قم برفع صورة الأشعة السينية (X-ray)", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # قراءة الصورة المرفوعة
+    # قراءة الصورة وتحويلها لمصفوفة
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    img_array = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-    st.image(cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB), caption='الصورة المرفوعة', use_container_width=True)
+    opencv_img = cv2.imdecode(file_bytes, 1)
     
-    # تحويل الصورة إلى تدرج رمادي (Grayscale) لحساب الكثافة
-    gray_img = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
+    # عرض الصورة المرفوعة
+    st.image(opencv_img, channels="BGR", caption="الصورة المرفوعة", use_column_width=True)
     
-    # معالجة الصورة وتوسيع الأبعاد للموديل
-    img_resized = cv2.resize(img_array, (224, 224)) 
-    img_preprocess = np.expand_dims(img_resized, axis=0) / 255.0
-    
-    # التنبؤ والتشخيص
-    with st.spinner('جاري تحليل الأشعة واستخراج الخصائص التشخيصية...'):
-        predictions = model.predict(img_preprocess)
-        class_idx = np.argmax(predictions)
-        pred_label_en = CATEGORIES_EN[class_idx]
-        pred_label_ar = CATEGORIES_AR[pred_label_en]
-        
-    # حساب نسبة الكثافة الكلية للبكسلات (تحويلها من مقياس 255 إلى مقياس 100 ليطابق صورتك)
-    mean_intensity = np.mean(gray_img)
-    density_percentage = (mean_intensity / 255.0) * 100
+    # معالجة الصورة لتناسب نموذج التدريب (تعديل الحجم إلى 224x224 وتطبيع البكسلات)
+    img_resized = cv2.resize(opencv_img, (224, 224))
+    img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
+    img_normalized = img_gray / 255.0
+    img_input = np.expand_dims(img_normalized, axis=-1)  # إضافة بُعد القناة
+    img_input = np.expand_dims(img_input, axis=0)       # إضافة بُعد الدفعة (Batch)
 
-    # عرض التقرير الطبي الرقمي المعاير بنفس صيغة صورتك
-    st.write("### :sheet: التقرير الطبي الرقمي المعاير:")
-    st.markdown(f"• التشخيص الاستشاري المقترح: {pred_label_ar}")
-    st.markdown(f"• نسبة الكثافة الكلية للبكسلات: {density_percentage:.2f} / 100")
-    st.markdown("• مسطرة القياس: معايرة رقمية مستقرة")
+    # إذا كان موديلك يتوقع 3 قنوات (RGB) بدلاً من قناة واحدة، استبدل الأسطر الثلاثة السابقة بـ:
+    # img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+    # img_normalized = img_rgb / 255.0
+    # img_input = np.expand_dims(img_normalized, axis=0)
+
+    # إجراء التوقع بالنموذج
+    predictions = model.predict(img_input)
+    predicted_class_index = np.argmax(predictions)
     
-    # 4. بناء مخطط كثافة البكسلات المظلل بالأحمر (Density Scale Histogram)
+    # جلب التسمية الصحيحة بناءً على المؤشر الرقمي
+    pred_label_ar = CATEGORIES_AR[predicted_class_index]
+    pred_label_en = CATEGORIES_EN[predicted_class_index]
+    
+    # حساب نسبة ثقة النتيجة لعرضها
+    confidence = np.max(predictions) * 100
+
     st.write("---")
-    st.write("### 📊 مخطط كثافة البكسلات (Density Scale):")
+    # 4. بالأحمر المائل بناء مخطط كثافة البكسلات
+    st.markdown(f"التشخيص الاستشاري المقترح: {pred_label_ar} ({pred_label_en})")
+    st.markdown(f"نسبة ثقة الفحص: {confidence:.2f}%")
+    st.markdown("*مستمرة القياس: معايرة رقمية مستقرة وموثوقة*")
+    st.write("---")
+    st.write("### 📊 مخطط كثافة البكسلات (Density Scale Histogram):")
     
-    # تحويل مصفوفة البكسلات لتكون على مقياس من 0 إلى 100 ليطابق رسمتك
+    # تحويل مصفوفة البكسلات لتكون مقياس من 0 إلى 100
+    gray_img = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
     scaled_pixels = (gray_img.flatten() / 255.0) * 100
     
+    # رسم الهيستوجرام
     fig, ax = plt.subplots(figsize=(7, 3.5))
-    
-    # رسم الهيستوجرام وتلوينه بالأحمر الداكن مع الشفافية ليطابق الصورة
     n, bins, patches = ax.hist(scaled_pixels, bins=50, color='#cc4c59', alpha=0.8, edgecolor='none')
     
-    # ملء المنطقة تحت المنحنى بلون أحمر متناسق تماماً كالصورة المرفوعة
-    ax.set_xlim(0, 100)
     ax.set_xlabel('Density Scale')
-    ax.set_ylabel('Pixel Co')
+    ax.set_ylabel('Pixel Count')
+    ax.set_xlim(0, 100)
     
     st.pyplot(fig)
