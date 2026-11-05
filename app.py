@@ -11,6 +11,16 @@ def load_my_model():
 
 model = load_my_model()
 
+# الحصول على الأبعاد المطلوبة للموديل تلقائياً بدون تحديد مسبق
+try:
+    input_shape = model.input_shape[0]  # جلب شكل المدخلات (None, Height, Width, Channels)
+    target_height = input_shape[1] if input_shape[1] is not None else 224
+    target_width = input_shape[2] if input_shape[2] is not None else 224
+    target_channels = input_shape[3] if input_shape[3] is not None else 3
+except Exception:
+    # قيم افتراضية احتياطية في حال فشل القراءة التلقائية
+    target_height, target_width, target_channels = 224, 224, 3
+
 # 2. إعداد تصنيفات الأمراض بالترتيب الصحيح
 CATEGORIES_AR = ['تضخم عضلة القلب', 'إصابة كورونا', 'حالة سليمة (طبيعي)', 'التهاب رئوي حاد', 'مرض السل الرئوي']
 CATEGORIES_EN = ['Cardiomegaly', 'COVID-19', 'Normal', 'Pneumonia', 'Tuberculosis']
@@ -28,19 +38,23 @@ if uploaded_file is not None:
     opencv_img = cv2.imdecode(file_bytes, 1)
     
     # عرض الصورة المرفوعة
-    st.image(opencv_img, channels="BGR", caption="الصورة المرفوعة", use_column_width=True)
+    st.image(opencv_img, channels="BGR", caption="الصورة المرفوعة")
     
-    # معالجة الصورة لتناسب نموذج التدريب (تعديل الحجم إلى 224x224 وتطبيع البكسلات)
-    img_resized = cv2.resize(opencv_img, (224, 224))
-    img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
-    img_normalized = img_gray / 255.0
-    img_input = np.expand_dims(img_normalized, axis=-1)  # إضافة بُعد القناة
-    img_input = np.expand_dims(img_input, axis=0)       # إضافة بُعد الدفعة (Batch)
+    # تعديل الحجم تلقائياً بناءً على ما يطلبه الموديل
+    img_resized = cv2.resize(opencv_img, (target_width, target_height))
+    
+    # ضبط قنوات الألوان تلقائياً (ملون أو أبيض وأسود) بناءً على الموديل
+    if target_channels == 1:
+        img_ready = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
+        img_normalized = img_ready / 255.0
+        img_input = np.expand_dims(img_normalized, axis=-1)
+    else:
+        img_ready = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+        img_normalized = img_ready / 255.0
+        img_input = img_normalized
 
-    # إذا كان موديلك يتوقع 3 قنوات (RGB) بدلاً من قناة واحدة، استبدل الأسطر الثلاثة السابقة بـ:
-    # img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-    # img_normalized = img_rgb / 255.0
-    # img_input = np.expand_dims(img_normalized, axis=0)
+    # إضافة بُعد الدفعة (Batch dimension) ليصبح جاهزاً تماماً للموديل
+    img_input = np.expand_dims(img_input, axis=0)
 
     # إجراء التوقع بالنموذج
     predictions = model.predict(img_input)
@@ -54,7 +68,7 @@ if uploaded_file is not None:
     confidence = np.max(predictions) * 100
 
     st.write("---")
-    # 4. بالأحمر المائل بناء مخطط كثافة البكسلات
+    # 4. التقرير والنتيجة
     st.markdown(f"التشخيص الاستشاري المقترح: {pred_label_ar} ({pred_label_en})")
     st.markdown(f"نسبة ثقة الفحص: {confidence:.2f}%")
     st.markdown("*مستمرة القياس: معايرة رقمية مستقرة وموثوقة*")
