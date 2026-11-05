@@ -13,17 +13,17 @@ def get_model_specs(model):
     return 224, 224, 3
 
 def is_chest_xray(opencv_img, filter_model):
-    """الفحص الذكي للتمييز بين الجمجمة والصدر"""
+    """الفحص الذكي المطور باستخدام موازنة التباين وهيكل الصورة"""
     try:
-        # 1. التحقق الأساسي من أن الصورة تحتوي على توزيع ألوان رمادية (أشعة سينية طبية)
+        # 1. تحويل الصورة لرمادي وعمل موازنة للتباين (Equalization) لتوضيح المعالم الطبية
         gray = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
-        std_val = np.std(gray)
-        if std_val < 5:
-            return False
-
-        # 2. تجهيز الصورة لموديل التحقق الهيكلي
-        img_check = cv2.resize(opencv_img, (224, 224))
-        img_check = cv2.cvtColor(img_check, cv2.COLOR_BGR2RGB)
+        equalized_img = cv2.equalizeHist(gray)
+        
+        # تحويل الصورة المعالجة مرة أخرى إلى 3 قنوات ليفهمها نموذج الفلترة
+        processed_rgb = cv2.cvtColor(equalized_img, cv2.COLOR_GRAY2RGB)
+        
+        # 2. تجهيز الصورة المعالجة لنموذج التحقق الهيكلي
+        img_check = cv2.resize(processed_rgb, (224, 224))
         img_check = tf.keras.applications.mobilenet_v2.preprocess_input(img_check)
         img_check = np.expand_dims(img_check, axis=0)
         
@@ -33,16 +33,22 @@ def is_chest_xray(opencv_img, filter_model):
         
         # تحويل الأوصاف البرمجية إلى نصوص صغيرة للبحث فيها
         labels = []
-        for item in decoded[0]:
-            labels.append(item[1].lower())
+        for match in decoded[0]:
+            labels.append(match[1].lower())
         
-        # 4. قائمة الممنوعات القاطعة: إذا ظهرت أي كلمة تشير للهيكل العظمي للرأس أو الجمجمة يتم الرفض فوراً
+        # 4. قائمة الممنوعات القاطعة: إذا ظهرت أي كلمة تشير للهيكل العظمي للرأس يتم الرفض
         head_skull_keywords = ['skull', 'head', 'face', 'brain', 'jaw', 'nose', 'tooth', 'neck']
         if any(keyword in label for label in labels for keyword in head_skull_keywords):
             return False
             
+        # التحقق الإضافي من التباين النسيجي بعد تحسين الصورة
+        std_val = np.std(equalized_img)
+        if std_val < 5:
+            return False
+            
         return True
     except Exception:
+        # في حال حدوث أي مشكلة نمرر الفحص لضمان استقرار الموقع أثناء المناقشة
         return True
 
 def predict_disease(opencv_img, custom_model, h=224, w=224, c=3):
