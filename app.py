@@ -6,7 +6,7 @@ from helpers import load_models, get_model_specs, is_chest_xray, predict_disease
 
 # 1. تحميل النماذج وإعداد الأبعاد
 try:
-    _, custom_model = load_models()
+    filter_model, custom_model = load_models()
     h, w, c = get_model_specs(custom_model)
     models_loaded = True
 except Exception as e:
@@ -28,10 +28,10 @@ if uploaded_file is not None and models_loaded:
     opencv_img = cv2.imdecode(file_bytes, 1)
     st.image(opencv_img, channels="BGR", caption="الصورة المرفوعة")
     
-    st.write("🔄 جاري فحص بنية الأشعة ومعايرتها...")
+    st.write("🔄 جاري فحص بنية الأشعة ومعايرتها النسيجية...")
     
-    # 3. التحقق النسيجي من الصورة (هل هي صدر أم لا؟)
-    if not is_chest_xray(opencv_img):
+    # 3. التحقق النسيجي والموديلي من نوع الصورة (صدر أم رأس؟)
+    if not is_chest_xray(opencv_img, filter_model):
         st.error("❌ عذراً، الملف المرفوع لا يطابق مواصفات أشعة الصدر الطبية! يرجى رفع صورة أشعة سينية خاصة بالصدر فقط (Chest X-ray).")
     else:
         # 4. تشخيص المرض ونسبة الثقة الديناميكية
