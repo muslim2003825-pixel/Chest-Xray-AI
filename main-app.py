@@ -64,10 +64,12 @@ else:
         st.write("### ⚙️ نتائج الفحص والتحليل الذكي المباشر:")
         
         with st.spinner("جاري استخراج التشخيص الرقمي ومقارنة الأنماط البيولوجية..."):
-            # جلب مصفوفة الاحتمالات الكاملة لجميع الأمراض
-            raw_predictions = chest_model.predict(input_tensor)[0]
-            result_index = np.argmax(raw_predictions)
-            confidence_score = raw_predictions[result_index] * 100 
+            # جلب القراءات وتسطيحها فوراً لمنع تزحزح وتداخل أسماء الفئات
+            raw_output = chest_model.predict(input_tensor)
+            final_probabilities = raw_output.flatten() # 🚀 دالة الفحص الجذري للأبعاد
+            
+            result_index = np.argmax(final_probabilities)
+            confidence_score = final_probabilities[result_index] * 100 
             
             pixel_percentage = calculate_affected_pixels_percentage(img_gray)
             
@@ -83,27 +85,25 @@ else:
             detected_disease = keras_ordered_labels[result_index]
             
             if result_index == 2: 
-                st.success(f"📌 التشخيص النهائي للمرشد: **سليم تماماً (Normal Chest) ولا يعاني من أعراض**")
+                st.success(f"📌 التشخيص النهائي للمريض: **سليم تماماً (Normal Chest) ولا يعاني من أعراض**")
             else:
                 st.error(f"📌 التشخيص الأعلى احتمالاً: **المريض مصاب بـ ({detected_disease})**")
                 st.warning("⚠️ تم رصد مؤشرات وبقع التهابية نشطة داخل الرئتين.")
                 
-            # عرض المقاييس الأساسية (الثقة والبكسل)
+            # عرض المقاييس الأساسية (الثقة وبكسل الأشعة)
             col1, col2 = st.columns(2)
             with col1:
                 st.metric(label="📈 نسبة ثقة التشخيص الحالي", value=f"{confidence_score:.2f}%")
             with col2:
                 st.metric(label="🔲 نسبة البكسل المتأثرة (Pixel Ratio)", value=f"{pixel_percentage:.1f}%")
             
-            # 📊 إضافة المخطط البياني الاحترافي لعرض توزيع النسب بين (كورونا والالتهاب الرئوي) وباقي الأمراض
+            # 📊 عرض مخطط الأعمدة التفاعلي والمنظم بعد تصحيح الأبعاد
             st.write("---")
-            st.write("#### 📊 تحليل توزيع احتمالات الأمراض الخمسة في النموذج:")
+            st.write("#### 📊 تحليل توزيع احتمالات الأمراض الخمسة في النموذج بعد ضبط المعايرة:")
             
-            # بناء جدول بيانات للمخطط
             chart_data = pd.DataFrame({
                 'المرض': keras_ordered_labels,
-                'نسبة الاحتمالية (%)': [float(p) * 100 for p in raw_predictions]
+                'نسبة الاحتمالية (%)': [float(p) * 100 for p in final_probabilities]
             })
             
-            # عرض المخطط بشكل شريطي تفاعلي
             st.bar_chart(data=chart_data, x='المرض', y='نسبة الاحتمالية (%)', use_container_width=True)
