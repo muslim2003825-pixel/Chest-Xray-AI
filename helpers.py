@@ -11,31 +11,33 @@ def get_model_specs(model):
     """معرفة الأبعاد المطلوبة للموديل تلقائياً"""
     try:
         shape = model.input_shape
-        h = shape[1] if shape[1] is not None else 224
-        w = shape[2] if shape[2] is not None else 224
-        c = shape[3] if shape[3] is not None else 3
+        h = shape if shape is not None else 224
+        w = shape if shape is not None else 224
+        c = shape if shape is not None else 3
     except Exception:
         h, w, c = 224, 224, 3
     return h, w, c
 
-def is_chest_xray(opencv_img, filter_model=None):
-    """التحقق المرن والذكي: يضمن قبول صور الأشعة السينية الطبية للصدر بمختلف مستويات الإضاءة"""
+def is_chest_xray(opencv_img):
+    """فحص نسيجي صارم: التمييز الدقيق بين بنية الصدر وأي نسيج عظمي آخر مثل الجمجمة أو اليد"""
     try:
-        # تحويل الصورة إلى رمادي وفحص أبعادها الهيكلية
         gray = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
+        gray_resized = cv2.resize(gray, (128, 128))
         
-        # حساب التباين والانتشار اللوني الأساسي للأشعة الطبية (تجنب الصور العادية الملونة تماماً)
-        std_val = np.std(gray)
+        # تحليل منطقة المنتصف (منطقة الرئتين والقلب)
+        center_area = gray_resized[32:96, 32:96]
+        bright_pixels = np.sum(center_area > 175) # حساب العظام البيضاء الكثيفة
+        std_val = np.std(gray)                    # حساب التباين العام
         
-        # إذا كانت الصورة تحتوي على تباين لوني طبيعي لصور الأشعة السينية، يتم قبولها فوراً
-        if std_val > 5:
-            return True
-        return False
+        # صور الصدر لا تحتوي على كتل عظمية بيضاء مصمتة في المنتصف مثل الجمجمة
+        if bright_pixels > (center_area.size * 0.35) or std_val < 8:
+            return False
+        return True
     except Exception:
         return False
 
 def predict_disease(opencv_img, custom_model, h, w, c):
-    """تجهيز الصورة الطبية وإجراء الفحص على الأمراض الخمسة وتغيير النتيجة ديناميكياً"""
+    """تجهيز الصورة الطبية وإجراء الفحص المتغير"""
     img = cv2.resize(opencv_img, (w, h))
     if c == 1:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -48,7 +50,4 @@ def predict_disease(opencv_img, custom_model, h, w, c):
     img_input = np.expand_dims(img, axis=0)
     predictions = custom_model.predict(img_input)
     
-    predicted_idx = np.argmax(predictions)
-    confidence = np.max(predictions) * 100
-    
-    return predicted_idx, confidence
+    return np.argmax(predictions), np.max(predictions) * 100
