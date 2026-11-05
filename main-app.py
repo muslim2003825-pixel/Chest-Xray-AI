@@ -30,8 +30,8 @@ if uploaded_file is not None and models_loaded:
     
     st.write("🔄 جاري فحص بنية الأشعة ومعايرتها النسيجية...")
     
-    # 3. التحقق النسيجي والموديلي من نوع الصورة (صدر أم رأس؟)
-    if not is_chest_xray(opencv_img, filter_model):
+    # 3. التحقق النسيجي والموديلي (تمرير المتغيرات الصحيحة لمنع تخطي الفلتر)
+    if is_chest_xray(opencv_img, filter_model) == False:
         st.error("❌ عذراً، الملف المرفوع لا يطابق مواصفات أشعة الصدر الطبية! يرجى رفع صورة أشعة سينية خاصة بالصدر فقط (Chest X-ray).")
     else:
         # 4. تشخيص المرض ونسبة الثقة الديناميكية
