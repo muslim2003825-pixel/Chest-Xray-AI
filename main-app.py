@@ -66,54 +66,43 @@ else:
         resized_img = cv2.resize(image, TARGET_SIZE)
         img_gray = cv2.cvtColor(resized_img, cv2.COLOR_BGR2GRAY) 
         
+        # خطوة التطبيع الهامة لمطابقة كولاب ومنع قراءة "تضخم" المستمرة لجميع الصور
         normalized_img = resized_img.astype('float32') / 255.0  
         input_tensor = np.expand_dims(normalized_img, axis=0) 
 
         st.write("### ⚙️ نتائج الفحص والتحليل الذكي:")
+        st.info("📸 تم قبول الصورة. جاري التشخيص الرقمي ومقارنة الأنماط البيولوجية...")
         
-        # 🕵️‍♂️ نظام التحليل الإحصائي الجذري لمنع تمرير صور الجمجمة والرقبة بالخطأ:
-        # صور الجمجمة والأسنان الجانبية تتميز بارتفاع التباين وانخفاض المساحات الرمادية الداكنة الموزعة مقارنة بأشعة الصدر
-        mean_brightness = np.mean(img_gray)
-        contrast_score = np.std(img_gray)
+        # تنفيذ التنبؤ عبر نموذج كولاب الخاص بك مباشرة دون قيود خارجية
+        predictions = chest_model.predict(input_tensor)
+        result_index = np.argmax(predictions)
+        confidence_score = predictions[0][result_index] * 100 
         
-        # صور الجمجمة الجانبية المرفوعة تمتلك سطوعاً متوسطاً كلياً عالياً وتباين حواف متقارب جداً
-        if mean_brightness > 90 and contrast_score > 55:
-            st.error("❌ تم حظر العملية! البنية التشريحية للصورة المرفوعة لا تتطابق مع الخصائص القياسية لأشعة الصدر (Chest X-ray).")
-            st.warning("💡 تنبيه منظومة الحماية: تم الكشف عن نمط عظمي مصمت وكثيف (مثل جمجمة أو فك). يرجى التأكد من رفع صورة الصدر الصحيحة للمريض.")
+        # حساب نسبة البكسل المتأثرة
+        pixel_percentage = calculate_affected_pixels_percentage(img_gray)
         
+        # ترتيب المخرجات الأبجدي الافتراضي للنموذج المستخرج من تدريب كولاب الخاص بك
+        keras_ordered_labels = [
+            "تضخم القلب (Cardiomegaly)",  
+            "فيروس كورونا (COVID-19)",     
+            "سليم تماماً (Normal)",         
+            "التهاب رئوي (Pneumonia)",     
+            "مرض السل (Tuberculosis)"       
+        ]
+        
+        # قراءة التشخيص الحقيقي
+        detected_disease = keras_ordered_labels[result_index]
+        
+        # عرض الحالة النهائية للمريض بناءً على القراءة التشخيصية الصحيحة
+        if result_index == 2: # إذا كانت النتيجة سليم (Normal)
+            st.success(f"📌 التشخيص النهائي للمريض: **سليم تماماً (Normal Chest) ولا يعاني من أي أعراض مرضية**")
         else:
-            st.info("📸 تم التحقق بنجاح: الهيكل العام متوافق مع مواصفات الصدر. جاري التشخيص...")
+            st.sidebar.warning("⚠️ تم رصد مؤشرات مرضية")
+            st.error(f"📌 التشخيص النهائي للمريض: **المريض مصاب بـ ({detected_disease})**")
             
-            # تنفيذ التنبؤ عبر نموذج كولاب الخاص بك
-            predictions = chest_model.predict(input_tensor)
-            result_index = np.argmax(predictions)
-            confidence_score = predictions[result_index] * 100 
-            
-            # حساب نسبة البكسل المتأثرة
-            pixel_percentage = calculate_affected_pixels_percentage(img_gray)
-            
-            # ترتيب المخرجات الأبجدي الافتراضي للنموذج من كولاب
-            keras_ordered_labels = [
-                "تضخم القلب (Cardiomegaly)",  
-                "فيروس كورونا (COVID-19)",     
-                "سليم تماماً (Normal)",         
-                "التهاب رئوي (Pneumonia)",     
-                "مرض السل (Tuberculosis)"       
-            ]
-            
-            # قراءة التشخيص الحقيقي
-            detected_disease = keras_ordered_labels[result_index]
-            
-            # عرض الحالة النهائية للمريض بناءً على القراءة التشخيصية الصحيحة
-            if result_index == 2: 
-                st.success(f"📌 التشخيص النهائي للمريض: **سليم تماماً (Normal Chest) ولا يعاني من أي أعراض مرضية**")
-            else:
-                st.sidebar.warning("⚠️ تم رصد مؤشرات مرضية")
-                st.error(f"📌 التشخيص النهائي للمريض: **المريض مصاب بـ ({detected_disease})**")
-                
-            # 5. عرض المقاييس والنسب الرقمية المطلوبة للمناقشة بشكل منسق واحترافي
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric(label="📈 نسبة ثقة اليقين (Confidence)", value=f"{confidence_score:.2f}%")
-            with col2:
-                st.metric(label="🔲 نسبة البكسل المتأثرة (Pixel Ratio)", value=f"{pixel_percentage:.1f}%")
+        # 5. عرض المقاييس والنسب الرقمية المطلوبة للمناقشة (ستظهر الآن بشكل دائم ومستقر)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric(label="📈 نسبة ثقة اليقين (Confidence)", value=f"{confidence_score:.2f}%")
+        with col2:
+            st.metric(label="🔲 نسبة البكسل المتأثرة (Pixel Ratio)", value=f"{pixel_percentage:.1f}%")
