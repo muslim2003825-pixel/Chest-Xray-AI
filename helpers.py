@@ -5,8 +5,6 @@ import tensorflow as tf
 def load_models():
     """تحميل الموديل الخاص بك بالإضافة إلى موديل تصفية ذكي"""
     custom_model = tf.keras.models.load_model('my_trained_model.h5')
-    
-    # تحميل شبكة MobileNetV2 مسبقة التدريب للتحقق من الميزات الشكلية والهيكلية للصورة
     filter_net = tf.keras.applications.MobileNetV2(weights='imagenet', input_shape=(224, 224, 3))
     return filter_net, custom_model
 
@@ -15,7 +13,7 @@ def get_model_specs(model):
     return 224, 224, 3
 
 def is_chest_xray(opencv_img, filter_model):
-    """الفحص القاطع والذكي للتمييز بين الجمجمة والصدر بدون قيود تباين معقدة"""
+    """الفحص الذكي للتمييز بين الجمجمة والصدر"""
     try:
         # 1. التحقق الأساسي من أن الصورة تحتوي على توزيع ألوان رمادية (أشعة سينية طبية)
         gray = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
@@ -43,10 +41,8 @@ def is_chest_xray(opencv_img, filter_model):
         if any(keyword in label for label in labels for keyword in head_skull_keywords):
             return False
             
-        # إذا لم تكن الصورة تحتوي على ميزات الرأس الممنوعة، نمررها كصورة صدر سليمة
         return True
     except Exception:
-        # في حال حدوث أي مشكلة نمرر الفحص لضمان استقرار الموقع أثناء المناقشة
         return True
 
 def predict_disease(opencv_img, custom_model, h=224, w=224, c=3):
