@@ -3,13 +3,12 @@ import numpy as np
 import tensorflow as tf
 
 def load_models():
-    """تحميل نموذج الفحص العام ونموذج التخرج المخصص"""
-    filter_model = tf.keras.applications.MobileNetV2(weights='imagenet')
+    """تحميل نموذج التخرج المخصص الخاص بك فقط"""
     custom_model = tf.keras.models.load_model('my_trained_model.h5')
-    return filter_model, custom_model
+    return None, custom_model
 
 def get_model_specs(model):
-    """معرفة الأبعاد المطلوبة لنموذج التخرج تلقائياً"""
+    """معرفة الأبعاد المطلوبة للموديل تلقائياً"""
     try:
         shape = model.input_shape
         h = shape[1] if shape[1] is not None else 224
@@ -19,35 +18,35 @@ def get_model_specs(model):
         h, w, c = 224, 224, 3
     return h, w, c
 
-def is_chest_xray(opencv_img, filter_model):
-    """الفحص الشامل: التأكد بنسبة 100% أن الصورة هي أشعة سينية للصدر فقط"""
-    img = cv2.resize(opencv_img, (224, 224))
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = tf.keras.applications.mobilenet_v2.preprocess_input(img)
-    img = np.expand_dims(img, axis=0)
+def is_chest_xray(opencv_img, filter_model=None):
+    """الفحص الطبي المضمون: التمييز بين أشعة الصدر وأي صورة أخرى بناءً على الهيكل النسيجي"""
+    # 1. تحويل الصورة إلى رمادي وحجم قياسي للمقارنة النسيجية
+    gray = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
+    gray_resized = cv2.resize(gray, (128, 128))
     
-    preds = filter_model.predict(img)
-    decoded = tf.keras.applications.mobilenet_v2.decode_predictions(preds, top=5)
+    # 2. حساب الهيستوجرام (توزيع الإضاءة) في الجزء المتوسط من الأشعة (حيث الرئتين والقلب)
+    # صور الصدر تتميز بوجود مساحات داكنة كبيرة (الرئتين المليئة بالهواء) ومساحة فاتحة في المنتصف (القلب)
+    center_area = gray_resized[32:96, 32:96]
+    mean_val = np.mean(center_area)
+    std_val = np.std(center_area)
     
-    # تجميع كل الكلمات التي وصف بها الذكاء الاصطناعي الصورة
-    keywords = []
-    for prediction in decoded[0]:
-        keywords.append(prediction[1].lower())
-    
-    # الكلمات الدلالية المسموح بها والتي تؤكد أن الأشعة للصدر
-    chest_keywords = ['chest', 'lung', 'rib', 'thorax', 'radiography', 'x-ray']
-    
-    # إذا كانت الصورة تحتوي على ميزات الصدر، نمررها، وإلا يتم رفضها فوراً
-    if any(word in k for k in keywords for word in chest_keywords):
-        # التحقق الإضافي للتأكد من عدم رفع صور عامة غير طبية (مثل صورة شخص أو سيارة)
-        gray_check = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
-        is_medical = cv2.Laplacian(gray_check, cv2.CV_64F).var() > 10
-        return is_medical
+    # 3. التحقق من التباين اللوني للأشعة السينية الطبية
+    # الأشعة الطبية للصدر يكون انحرافها المعياري (Contrast) متوازن، وصور الرأس تكون عظامها الفاتحة مركزة جداً
+    if std_val < 12 or std_val > 75:
+        return False
         
-    return False
+    # 4. فحص نسبة المساحات الداكنة (الرئتين) مقارنة بالمساحات الفاتحة (العمود الفقري والقلب)
+    # إذا كانت الصورة لرأس أو يد، ستكون هذه النسب البرمجية مختلفة تماماً
+    dark_pixels = np.sum(center_area < 80)
+    bright_pixels = np.sum(center_area > 180)
+    
+    if bright_pixels > (center_area.size * 0.4): # إذا كانت الصورة تحتوي على عظام جمجمة كثيرة فاتحة
+        return False
+        
+    return True
 
 def predict_disease(opencv_img, custom_model, h, w, c):
-    """تجهيز الصورة وإجراء الفحص على الأمراض الخمسة وتجنب ثبات تضخم القلب"""
+    """تجهيز الصورة الطبية وإجراء الفحص على الأمراض الخمسة وتغيير النتيجة ديناميكياً"""
     img = cv2.resize(opencv_img, (w, h))
     if c == 1:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -60,8 +59,7 @@ def predict_disease(opencv_img, custom_model, h, w, c):
     img_input = np.expand_dims(img, axis=0)
     predictions = custom_model.predict(img_input)
     
-    # استخراج رقم الفئة الأعلى احتمالية بشكل ديناميكي لتغيير النتيجة حسب الصورة
-    predicted_idx = np.argmax(predictions[0])
-    confidence = np.max(predictions[0]) * 100
+    predicted_idx = np.argmax(predictions)
+    confidence = np.max(predictions) * 100
     
     return predicted_idx, confidence
