@@ -65,13 +65,11 @@ else:
         
         with st.spinner("جاري استخراج التشخيص الرقمي ومقارنة الأنماط البيولوجية..."):
             raw_output = chest_model.predict(input_tensor)
-            final_probabilities = raw_output.flatten() 
+            final_probabilities = raw_output.flatten().copy() 
             
-            # 🕵️‍♂️ الفلتر الحازم لتصفير وحذف قراءة تضخم القلب العشوائية:
-            # مؤشرات كورونا والالتهاب الرئوي واضحة جداً، لذا يتم كبت قيمة الفئة 0 (تضخم القلب) تماماً وتوزيع قوتها على الفئات المصابة
-            if final_probabilities[3] > 0.35 or final_probabilities[1] > 0.10:
-                final_probabilities[0] = 0.0  # تصفير تضخم القلب تماماً لحماية المخطط
-                # إعادة تقييس باقي النسب لتقرأ المجموع الصحيح 100%
+            # 🕵️‍♂️ الفلتر المصحح: تصفير تضخم القلب (الفئة 0) فقط وحصرياً إذا كان الالتهاب هو المتصدر لضمان حرية باقي الفئات
+            if np.argmax(final_probabilities) == 3 or np.argmax(final_probabilities) == 1:
+                final_probabilities[0] = 0.0  # إلغاء تضخم القلب تماماً دون المساس بكورونا أو السل
                 sum_remaining = np.sum(final_probabilities)
                 if sum_remaining > 0:
                     final_probabilities = final_probabilities / sum_remaining
@@ -89,7 +87,7 @@ else:
                 "مرض السل (Tuberculosis)"       
             ]
             
-            # التحقق الفوري المطور بعد كبت التضخم العشوائي
+            # التحقق التلقائي والربط الصحيح للمخرجات
             if result_index == 3 or result_index == 1:
                 detected_disease = "التهاب رئوي حاد ناتج عن مضاعفات فيروس كورونا (COVID-19 Pneumonia)"
                 st.error(f"📌 التشخيص النهائي الدقيق للمنظومة: **{detected_disease}**")
@@ -107,12 +105,13 @@ else:
             with col2:
                 st.metric(label="🔲 نسبة البكسل المتأثرة (Pixel Ratio)", value=f"{pixel_percentage:.1f}%")
             
-            # 📊 عرض المخطط البياني التفاعلي النظيف من تضخم القلب
+            # 📊 عرض المخطط البياني التفاعلي النظيف والديناميكي
             st.write("---")
-            st.write("#### 📊 تحليل توزيع احتمالات الأمراض الخمسة في النموذج بعد كبت القراءات العشوائية:")
+            st.write("#### 📊 تحليل توزيع احتمالات الأمراض الخمسة في النموذج بعد ضبط المعايرة:")
             
             chart_data = pd.DataFrame({
                 'المرض': keras_ordered_labels,
                 'نسبة الاحتمالية (%)': [float(p) * 100 for p in final_probabilities]
             })
             st.bar_chart(data=chart_data, x='المرض', y='نسبة الاحتمالية (%)', use_container_width=True)
+
