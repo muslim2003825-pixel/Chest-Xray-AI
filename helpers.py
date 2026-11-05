@@ -8,15 +8,9 @@ def load_models():
     return None, custom_model
 
 def get_model_specs(model):
-    """معرفة الأبعاد المطلوبة للموديل تلقائياً"""
-    try:
-        shape = model.input_shape
-        h = shape if shape is not None else 224
-        w = shape if shape is not None else 224
-        c = shape if shape is not None else 3
-    except Exception:
-        h, w, c = 224, 224, 3
-    return h, w, c
+    """تحديد الأبعاد القياسية الثابتة والآمنة لتجنب أخطاء السيرفر"""
+    # الأبعاد الافتراضية القياسية لشبكات التصنيف الطبي (VGG, ResNet, MobileNet)
+    return 224, 224, 3
 
 def is_chest_xray(opencv_img):
     """فحص نسيجي صارم: التمييز الدقيق بين بنية الصدر وأي نسيج عظمي آخر مثل الجمجمة أو اليد"""
@@ -36,9 +30,14 @@ def is_chest_xray(opencv_img):
     except Exception:
         return False
 
-def predict_disease(opencv_img, custom_model, h, w, c):
-    """تجهيز الصورة الطبية وإجراء الفحص المتغير"""
+def predict_disease(opencv_img, custom_model, h=224, w=224, c=3):
+    """تجهيز الصورة الطبية بدقة وإجراء الفحص المتغير"""
+    # التأكد من أن الأبعاد أرقام صحيحة دائماً لمنع خطأ cv2.error
+    h = int(h) if h is not None else 224
+    w = int(w) if w is not None else 224
+    
     img = cv2.resize(opencv_img, (w, h))
+    
     if c == 1:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img = img / 255.0
