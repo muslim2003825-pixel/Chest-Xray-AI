@@ -2,6 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 import tensorflow as tf
+import pandas as pd
 
 # 1. إعدادات واجهة التطبيق الاحترافية لبحث التخرج
 st.set_page_config(page_title="المنظومة الذكية لتشخيص أمراض الصدر", layout="centered")
@@ -10,7 +11,6 @@ st.title("🫁 المنظومة الذكية لتشخيص أمراض الصدر"
 st.write("بحث تخرج: تشخيص التهاب الرئة، تضخم القلب، السل، وكورونا باستخدام الذكاء الاصطناعي")
 st.write("---")
 
-# الحجم القياسي المعتمد في كود كولاب الخاص بك تلقائياً خلف الكواليس
 TARGET_SIZE = (224, 224) 
 
 # 2. تحميل نموذج التشخيص الرئيسي من جيت هاب
@@ -45,64 +45,65 @@ scan_type = st.radio(
 
 st.write("---")
 
-# 4. التحكم في توجيه الفحص بناءً على الاختيار
 if scan_type == "فحص الجمجمة أو عظام أخرى (Skull / Out of Bound)":
     st.error("❌ عذراً! النظام مخصص حصرياً لتشخيص أمراض القفص الصدري والرئتين.")
-    st.warning("💡 تنبيه اللجنة: تم حجب المدخلات نظراً لأن النموذج مدرب فقط على أمراض الصدر. يرجى التغيير إلى خيار فحص الصدر المخصص بالواجهة.")
-
 else:
-    # واجهة استقبال ورفع الصور في حال اختيار الصدر
     uploaded_file = st.file_uploader("قم برفع صورة أشعة الصدر السينية (Chest X-ray)...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None and model_loaded:
-        # قراءة الصورة المرفوعة وتحويلها بصيغة OpenCV
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        image = cv2.imdecode(file_bytes, 1)
-        
-        # عرض الصورة الأصلية للمستخدم بكامل حجمها الطبيعي المرفوع
+        image_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        image = cv2.imdecode(image_bytes, 1)
         st.image(image, caption="الصورة الطبية الجاري فحصها حالياً", use_container_width=True)
         
-        # المعالجة المسبقة التلقائية للصورة لتطابق مدخلات كولاب (224x224 وتطبيع الدقيق)
         resized_img = cv2.resize(image, TARGET_SIZE)
         img_gray = cv2.cvtColor(resized_img, cv2.COLOR_BGR2GRAY) 
-        
-        # خطوة التطبيع الهامة لمطابقة كولاب ومنع قراءة "تضخم" المستمرة لجميع الصور
         normalized_img = resized_img.astype('float32') / 255.0  
         input_tensor = np.expand_dims(normalized_img, axis=0) 
 
-        st.write("### ⚙️ نتائج الفحص والتحليل الذكي:")
-        st.info("📸 تم قبول الصورة. جاري التشخيص الرقمي ومقارنة الأنماط البيولوجية...")
+        st.write("---")
+        st.write("### ⚙️ نتائج الفحص والتحليل الذكي المباشر:")
         
-        # تنفيذ التنبؤ عبر نموذج كولاب الخاص بك مباشرة دون قيود خارجية
-        predictions = chest_model.predict(input_tensor)
-        result_index = np.argmax(predictions)
-        confidence_score = predictions[0][result_index] * 100 
-        
-        # حساب نسبة البكسل المتأثرة
-        pixel_percentage = calculate_affected_pixels_percentage(img_gray)
-        
-        # ترتيب المخرجات الأبجدي الافتراضي للنموذج المستخرج من تدريب كولاب الخاص بك
-        keras_ordered_labels = [
-            "تضخم القلب (Cardiomegaly)",  
-            "فيروس كورونا (COVID-19)",     
-            "سليم تماماً (Normal)",         
-            "التهاب رئوي (Pneumonia)",     
-            "مرض السل (Tuberculosis)"       
-        ]
-        
-        # قراءة التشخيص الحقيقي
-        detected_disease = keras_ordered_labels[result_index]
-        
-        # عرض الحالة النهائية للمريض بناءً على القراءة التشخيصية الصحيحة
-        if result_index == 2: # إذا كانت النتيجة سليم (Normal)
-            st.success(f"📌 التشخيص النهائي للمريض: **سليم تماماً (Normal Chest) ولا يعاني من أي أعراض مرضية**")
-        else:
-            st.sidebar.warning("⚠️ تم رصد مؤشرات مرضية")
-            st.error(f"📌 التشخيص النهائي للمريض: **المريض مصاب بـ ({detected_disease})**")
+        with st.spinner("جاري استخراج التشخيص الرقمي ومقارنة الأنماط البيولوجية..."):
+            # جلب مصفوفة الاحتمالات الكاملة لجميع الأمراض
+            raw_predictions = chest_model.predict(input_tensor)[0]
+            result_index = np.argmax(raw_predictions)
+            confidence_score = raw_predictions[result_index] * 100 
             
-        # 5. عرض المقاييس والنسب الرقمية المطلوبة للمناقشة (ستظهر الآن بشكل دائم ومستقر)
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric(label="📈 نسبة ثقة اليقين (Confidence)", value=f"{confidence_score:.2f}%")
-        with col2:
-            st.metric(label="🔲 نسبة البكسل المتأثرة (Pixel Ratio)", value=f"{pixel_percentage:.1f}%")
+            pixel_percentage = calculate_affected_pixels_percentage(img_gray)
+            
+            # ترتيب المخرجات الأبجدي الافتراضي للنموذج المستخرج من تدريب كولاب الخاص بك
+            keras_ordered_labels = [
+                "تضخم القلب (Cardiomegaly)",  
+                "فيروس كورونا (COVID-19)",     
+                "سليم تماماً (Normal)",         
+                "التهاب رئوي (Pneumonia)",     
+                "مرض السل (Tuberculosis)"       
+            ]
+            
+            detected_disease = keras_ordered_labels[result_index]
+            
+            if result_index == 2: 
+                st.success(f"📌 التشخيص النهائي للمرشد: **سليم تماماً (Normal Chest) ولا يعاني من أعراض**")
+            else:
+                st.error(f"📌 التشخيص الأعلى احتمالاً: **المريض مصاب بـ ({detected_disease})**")
+                st.warning("⚠️ تم رصد مؤشرات وبقع التهابية نشطة داخل الرئتين.")
+                
+            # عرض المقاييس الأساسية (الثقة والبكسل)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(label="📈 نسبة ثقة التشخيص الحالي", value=f"{confidence_score:.2f}%")
+            with col2:
+                st.metric(label="🔲 نسبة البكسل المتأثرة (Pixel Ratio)", value=f"{pixel_percentage:.1f}%")
+            
+            # 📊 إضافة المخطط البياني الاحترافي لعرض توزيع النسب بين (كورونا والالتهاب الرئوي) وباقي الأمراض
+            st.write("---")
+            st.write("#### 📊 تحليل توزيع احتمالات الأمراض الخمسة في النموذج:")
+            
+            # بناء جدول بيانات للمخطط
+            chart_data = pd.DataFrame({
+                'المرض': keras_ordered_labels,
+                'نسبة الاحتمالية (%)': [float(p) * 100 for p in raw_predictions]
+            })
+            
+            # عرض المخطط بشكل شريطي تفاعلي
+            st.bar_chart(data=chart_data, x='المرض', y='نسبة الاحتمالية (%)', use_container_width=True)
