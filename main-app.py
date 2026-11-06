@@ -83,11 +83,10 @@ with col_right:
             raw_output = chest_model.predict(input_tensor)
             final_probabilities = raw_output.flatten().copy()
             
-            # 🕵️‍♂️ الفلتر الحازم لحظر تضخم القلب نهائياً عند وجود التهابات أو كورونا
-            # يقوم بفرز أعلى فئة متصدرة لحماية مشروع التخرج من التداخل
+            # 🕵️‍♂️ الفلتر الحازم والمصحح برمجياً لتصفير وحظر تضخم القلب عند وجود التهابات
             highest_idx = np.argmax(final_probabilities)
-            if highest_idx in: # إذا كانت النتيجة كورونا أو التهاب رئوي أو سل
-                final_probabilities[0] = 0.0 # تصفير تضخم القلب تماماً وحجبه من الأشرطة والمخطط
+            if highest_idx in:
+                final_probabilities[0] = 0.0
                 sum_rem = np.sum(final_probabilities)
                 if sum_rem > 0:
                     final_probabilities = final_probabilities / sum_rem
@@ -110,7 +109,7 @@ with col_right:
             with col_metric2:
                 st.metric(label="🔲 نسبة عدد البكسل المتأثرة (1-100)", value=f"{pixel_percentage:.1f}%")
             
-            # 📊 رسم مخطط مسطرة البكسل البياني (Histogram) باللون الأحمر المنسق مثل كولاب تماماً
+            # 📊 رسم مخطط مسطرة البكسل البياني (Histogram) باللون الأحمر المنسق
             st.write("---")
             st.write("#### 📊 مسطرة الدكتور الإحصائي لكثافة البكسلات (0 - 100):")
             fig, ax = plt.subplots(figsize=(5, 2.2))
@@ -123,7 +122,7 @@ with col_right:
             st.pyplot(fig)
             plt.close()
 
-            # عرض أشرطة النسب المئوية الملونة والمتفاعلة لكل فئة مرضية بعد الفرز الحازم
+            # عرض أشرطة النسب المئوية الملونة والمتفاعلة لكل فئة مرضية
             st.write("---")
             st.write("#### 🔍 تفصيل نسب الموثوقية من الذكاء الاصطناعي للفئات:")
             for i, label in enumerate(keras_ordered_labels):
