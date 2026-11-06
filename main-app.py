@@ -83,9 +83,9 @@ with col_right:
             raw_output = chest_model.predict(input_tensor)
             final_probabilities = raw_output.flatten().copy()
             
-            # 🕵️‍♂️ الفلتر الحازم والمصحح برمجياً لتصفير وحظر تضخم القلب عند وجود التهابات
-            highest_idx = np.argmax(final_probabilities)
-            if highest_idx in:
+            # 🕵️‍♂️ صياغة جديدة ومضمونة 100% لحظر وتصفير تضخم القلب عند وجود التهابات
+            highest_idx = int(np.argmax(final_probabilities))
+            if highest_idx == 1 or highest_idx == 3 or highest_idx == 4:
                 final_probabilities[0] = 0.0
                 sum_rem = np.sum(final_probabilities)
                 if sum_rem > 0:
